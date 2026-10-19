@@ -56,18 +56,36 @@ def model_of(path):
 def main():
     dirs = sys.argv[1:]
     if not dirs:
-        print(__doc__)
-        return
-    files = [f for d in dirs for f in Path(d).rglob("*.md") if f.parent.name != "_meta"]
-    if not files:
-        print(f"找不到语料：{dirs}")
-        return
+        print(__doc__, file=sys.stderr)
+        return 2
+    texts = {}
+    for i, d in enumerate(dirs, 1):
+        files = [f for f in Path(d).rglob("*.md") if f.parent.name != "_meta"]
+        if not files:
+            print(f"跳过第 {i} 个语料目录：找不到 Markdown 语料。", file=sys.stderr)
+            continue
+        skipped = 0
+        for f in files:
+            try:
+                t = f.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                skipped += 1
+                continue
+            if not re.search(r"[一-鿿]", t):
+                skipped += 1
+                continue
+            texts[f] = t
+        if skipped:
+            print(f"跳过第 {i} 个语料目录中 {skipped} 篇无法读取或不含汉字的文档。",
+                  file=sys.stderr)
+    if not texts:
+        print("无法统计：没有含汉字的有效语料。", file=sys.stderr)
+        return 1
 
-    texts = {f: f.read_text(encoding="utf-8") for f in files}
     joined = "\n".join(texts.values())
     kchars = len(re.findall(r"[一-鿿]", joined)) / 1000
-    models = sorted({model_of(f) for f in files})
-    print(f"语料 {len(files)} 篇，{kchars/10:.1f} 万汉字，模型 {len(models)} 个：{', '.join(models)}\n")
+    models = sorted({model_of(f) for f in texts})
+    print(f"语料 {len(texts)} 篇，{kchars/10:.1f} 万汉字，模型 {len(models)} 个：{', '.join(models)}\n")
 
     # 每模型汉字数，用于分模型频率
     mk = defaultdict(float)
@@ -88,10 +106,10 @@ def main():
     print(head)
     print("-" * len(head))
     for per_k, total, docs, name, pm in rows:
-        cov = f"{docs}/{len(files)}"
+        cov = f"{docs}/{len(texts)}"
         line = f"{name:<16}{per_k:>8.2f}{total:>7}{cov:>10}  " + "".join(f"{pm[m]:>12.2f}" for m in models)
         print(line)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
