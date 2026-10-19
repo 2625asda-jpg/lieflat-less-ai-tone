@@ -258,7 +258,15 @@ python3 scripts/check-structure.py --human <dirs...> --ai <dirs...>
 python3 scripts/check-translationese.py <dirs...>
 ```
 
-All three scripts read `.md` files from directory arguments only. They contain no corpus data and do not use directory names as output labels. Operator definitions sit at the top of each script.
+All three scripts read `.md` files from directory arguments only. They contain no corpus data and do not use directory names as output labels. Operator definitions sit at the top of each script. They measure text features; they do not rewrite articles or determine whether an author is AI.
+
+`check-structure.py` skips documents without measurable Chinese paragraphs; `check-translationese.py` skips documents without Chinese characters. Skipped inputs are reported on standard error and excluded from the statistics. The scripts exit with a nonzero status if either side of the structure comparison, or the entire translationese input, has no valid corpus data.
+
+Run the regression tests from the repository root (Python standard library only):
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 Substituting your own corpus recomputes every metric. If results diverge from those reported here, check first whether topic and genre are aligned across sides, and whether the denominator matches the unit being measured.
 

@@ -87,6 +87,24 @@ def load(dirs):
     return out
 
 
+def load_valid_groups(dirs, label):
+    texts, groups = [], []
+    for i, d in enumerate(dirs, 1):
+        loaded = load([d])
+        # 只筛选文档；保留已有的段落提取和结构测量方式。
+        valid = [t for t in loaded
+                 if any(re.search(r"[一-鿿]", p) for p in paragraphs(t))]
+        if not valid:
+            print(f"跳过{label}第 {i} 组：没有可统计的中文段落。", file=sys.stderr)
+            continue
+        if len(valid) < len(loaded):
+            print(f"跳过{label}第 {i} 组中 {len(loaded) - len(valid)} 篇"
+                  "没有可统计中文段落的文档。", file=sys.stderr)
+        texts.extend(valid)
+        groups.append(measure(valid))
+    return texts, groups
+
+
 def main():
     human, ai, cur = [], [], None
     for a in sys.argv[1:]:
@@ -97,16 +115,18 @@ def main():
         elif cur is not None:
             cur.append(a)
     if not human or not ai:
-        print(__doc__)
-        return
+        print(__doc__, file=sys.stderr)
+        return 2
 
-    groups = []
-    for d in human:
-        ts = load([d])
-        if ts:
-            groups.append((f"g{len(groups) + 1}", measure(ts)))
-    hm = measure([t for d in human for t in load([d])])
-    am = measure(load(ai))
+    human_texts, groups = load_valid_groups(human, "人类")
+    ai_texts, _ = load_valid_groups(ai, "AI")
+    if not human_texts or not ai_texts:
+        missing = "、".join(label for label, texts in
+                           (("人类", human_texts), ("AI", ai_texts)) if not texts)
+        print(f"无法统计：{missing}语料没有可统计的中文段落。", file=sys.stderr)
+        return 1
+    hm = measure(human_texts)
+    am = measure(ai_texts)
 
     keys = [k for k in am if k != "段数"]
     print(f"AI {am['段数']} 段，人类 {hm['段数']} 段\n")
@@ -117,10 +137,10 @@ def main():
         a, h = am[k], hm[k]
         r = a / h if h > 0.001 else float("inf")
         # 各组数值只用来算稳定性，不打印
-        vals = [m[k] for _, m in groups]
+        vals = [m[k] for m in groups]
         spread = max(vals) / max(min(vals), 0.01)
         print(f"{k:<26}{a:>8.2f}{h:>8.2f}{r:>6.2f}×{'稳定' if spread <= 5 else '波动大':>8}")
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
